@@ -105,7 +105,7 @@ JOLT-TARGETS-NEEDING-DEPS := \
   deadhost mirrordrift mirrordrift-regen regexdfacheck regexdfacheck-regen regexdfa \
   narrow narrowhash numeric numwp oparity pic protoret printperf remint sbperf sci selfhost shakelocal \
   traceemit vfaslceiling \
-  shakesmoke smoke staticnativesmoke stateimage test testbin transient unit unitcontext zlibregistersmoke \
+  shakesmoke smoke staticnativesmoke stateimage test testbin transient unit unitcontext zipextract zlibregistersmoke \
   threadsafety values wp ci
 
 # Only mark PHONY targets for names that have file system conflicts:
@@ -160,7 +160,7 @@ install: build
 # naming the covered tree is written ONLY on a complete pass. `make gate-status`
 # answers "is this working tree gated?" — which is not something to remember.
 
-CI-GATES := submodules values corpus unit documented grenadine mvnhttp readscaling compilescaling applyscaling lazyscaling vecscaling pipescaling chunkscaling printscaling complexity ioscaling hotscaling fastpathratio depssmoke taskssmoke scriptsmoke completionssmoke depscpcache depsunit \
+CI-GATES := submodules values corpus unit documented grenadine mvnhttp readscaling compilescaling applyscaling lazyscaling vecscaling pipescaling chunkscaling printscaling complexity ioscaling hotscaling fastpathratio depssmoke taskssmoke scriptsmoke completionssmoke depscpcache depsunit zipextract \
   smoke tracesmoke errorreport errorkinds buildsmoke buildlibsmoke staticnativesmoke zlibregistersmoke sci scifunctional cts loaderconf ffi zlibunit ffidupsym continuations stdlibfasl \
   transient rrbprop rrbscaling stateimage infer wp devirt fieldread numwp fieldnum fieldjoin contagion \
   hasheq narrowhash \
@@ -610,6 +610,12 @@ depscpcache: testbin
 # a fake coordinate type. The cases are ported from tools.deps. Offline.
 depsunit:
 	@JOLT_NO_USER_DEPS=1 bin/jolt run test/deps_expand_test.clj
+
+# jolt.host/extract-zip! over the zip fixtures: the trees unzip -o -q made,
+# UTF-8 names, an archive with a comment, replaced files, refused names, a
+# symbolic link, and archives that are not whole. Offline.
+zipextract:
+	@JOLT_NO_USER_DEPS=1 bin/jolt run test/zip_extract_test.clj
 
 # Vendored Grenadine core plus Jolt's effective-POM adapter. Offline.
 grenadine:
