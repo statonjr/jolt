@@ -160,7 +160,7 @@ install: build
 # naming the covered tree is written ONLY on a complete pass. `make gate-status`
 # answers "is this working tree gated?" — which is not something to remember.
 
-CI-GATES := submodules values corpus unit documented grenadine mvnhttp readscaling compilescaling applyscaling lazyscaling vecscaling pipescaling chunkscaling printscaling complexity ioscaling hotscaling fastpathratio depssmoke taskssmoke scriptsmoke completionssmoke depscpcache depsunit zipextract \
+CI-GATES := submodules values corpus unit documented grenadine mvnhttp readscaling compilescaling applyscaling lazyscaling vecscaling pipescaling chunkscaling printscaling complexity ioscaling hotscaling fastpathratio depssmoke taskssmoke scriptsmoke completionssmoke depscpcache depsunit zipextract depsnounzip \
   smoke tracesmoke errorreport errorkinds buildsmoke buildlibsmoke staticnativesmoke zlibregistersmoke sci scifunctional cts loaderconf ffi zlibunit ffidupsym continuations stdlibfasl \
   transient rrbprop rrbscaling stateimage infer wp devirt fieldread numwp fieldnum fieldjoin contagion \
   hasheq narrowhash \
@@ -604,6 +604,12 @@ completionssmoke: testbin
 # project in a temp dir; gates the cache key, invalidation, and dev posture.
 depscpcache: testbin
 	@JOLT_BIN="$${JOLT_BIN:-target/release/jolt}" sh host/chez/deps-cpcache-smoke.sh
+
+# Dependency resolution with no unzip on PATH (jolt issue #988): a :mvn/version
+# jar from an offline local repository resolves, and a jar that is not a zip
+# fails loudly with no marker and no temporary file left.
+depsnounzip: testbin
+	@JOLT_BIN="$${JOLT_BIN:-target/release/jolt}" sh host/chez/deps-no-unzip-smoke.sh
 
 # Shared Grenadine dependency-expansion integration tests: exclusions, version
 # selection, orphan cutting, and the Maven version comparator, driven through
@@ -1089,9 +1095,9 @@ parkcheck:
 # jolt.host/sh is Chez's `system`, which is cmd.exe on Windows: `mkdir -p a/b`
 # there creates a directory named `-p`, and mv/rm/touch/test/find are not
 # commands at all. So the resolver does its filesystem work through filesystem
-# calls, and the shell is left for git and unzip, which are real programs. The
-# two spellings look alike in the source, so the rule is checked rather than
-# remembered.
+# calls, and the shell is left for git, which is a real program; jars extract in
+# process. The two spellings look alike in the source, so the rule is checked
+# rather than remembered.
 shelloutcheck:
 	@sh host/chez/shellout-check.sh
 
