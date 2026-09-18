@@ -98,14 +98,14 @@ endif
 JOLT-TARGETS-NEEDING-DEPS := \
   aotcacheperf aotcachesmoke aotfingerprint asynctimer buildlibsmoke buildsmoke \
   aotcachepathsmoke compilepathsmoke contagion corpus cts dcerefs depssmoke depsunit devboot \
-  readscaling vecscaling pipescaling chunkscaling printscaling complexity ioscaling hotscaling applyscaling lazyscaling \
+  readscaling vecscaling pipescaling chunkscaling printscaling complexity ioscaling hotscaling applyscaling zipmemory lazyscaling \
   devbootsmoke devirt directlink ffi fibers fieldjoin fieldnum fieldread flarr fnform coreproc grenadine \
   gateboot gatebootsmoke gosm hasheq httpsfetch infer inline inline-body irvalidate statlayout \
   jolt jolt-debug jolt-release joltsmoke libconformance mandelbrot-num mathfl mvnhttp \
   deadhost mirrordrift mirrordrift-regen regexdfacheck regexdfacheck-regen regexdfa \
   narrow narrowhash numeric numwp oparity pic protoret printperf remint sbperf sci selfhost shakelocal \
   traceemit vfaslceiling \
-  shakesmoke smoke staticnativesmoke stateimage test testbin transient unit unitcontext \
+  shakesmoke smoke staticnativesmoke stateimage test testbin transient unit unitcontext zipextract zlibregistersmoke zlibnativesmoke \
   threadsafety values wp ci
 
 # Only mark PHONY targets for names that have file system conflicts:
@@ -160,8 +160,8 @@ install: build
 # naming the covered tree is written ONLY on a complete pass. `make gate-status`
 # answers "is this working tree gated?" — which is not something to remember.
 
-CI-GATES := submodules values corpus unit documented grenadine mvnhttp readscaling compilescaling applyscaling lazyscaling vecscaling pipescaling chunkscaling printscaling complexity ioscaling hotscaling fastpathratio depssmoke taskssmoke scriptsmoke completionssmoke depscpcache depsunit \
-  smoke tracesmoke errorreport errorkinds buildsmoke buildlibsmoke staticnativesmoke sci scifunctional cts loaderconf ffi ffidupsym continuations stdlibfasl \
+CI-GATES := submodules values corpus unit documented grenadine mvnhttp readscaling compilescaling applyscaling zipmemory lazyscaling vecscaling pipescaling chunkscaling printscaling complexity ioscaling hotscaling fastpathratio depssmoke taskssmoke scriptsmoke completionssmoke depscpcache depsunit zipextract depsnounzip \
+  smoke tracesmoke errorreport errorkinds buildsmoke buildlibsmoke staticnativesmoke zlibregistersmoke zlibnativesmoke sci scifunctional cts loaderconf ffi zlibunit ffidupsym continuations stdlibfasl \
   transient rrbprop rrbscaling stateimage infer wp devirt fieldread numwp fieldnum fieldjoin contagion \
   hasheq narrowhash \
   protoret pic narrow directlink directcall arraymap arraybacking unitcontext numeric oparity mathfl flarr \
@@ -455,6 +455,16 @@ buildlibsmoke: testbin
 staticnativesmoke: testbin
 	@JOLT_BIN="$${JOLT_BIN:-target/release/jolt}" sh host/chez/static-native-smoke.sh
 
+# Every binary kind registers its linked zlib as jolt_z_* (java.util.zip binds
+# those names) and none exports zlib's own names on Linux.
+zlibregistersmoke: testbin
+	@JOLT_BIN="$${JOLT_BIN:-target/release/jolt}" sh host/chez/zlib-register-smoke.sh
+
+# A zlib a built app loads through :jolt/native does not change the zlib
+# java.util.zip uses.
+zlibnativesmoke: testbin
+	@JOLT_BIN="$${JOLT_BIN:-target/release/jolt}" sh host/chez/zlib-native-smoke.sh
+
 # Duplicate native symbol detection (issue #731): a declared :jolt/native that
 # carries its own static copy of another's code — raygui linked against
 # libraylib.a — used to go inert with no error. Pins that the footgun build is
@@ -504,6 +514,13 @@ compilescaling: testbin
 # an unbounded seq until the process dies.
 applyscaling: testbin
 	@JOLT_NO_USER_DEPS=1 target/release/jolt run test/apply_scaling_test.clj
+
+# Peak memory of the java.util.zip streams: 100 MB through GZIPOutputStream or
+# GZIPInputStream peaks within 2 MB of 1 MB. It reads the live heap, not the
+# collector's high-water mark applyscaling reads: that mark hides anything under
+# one collection trip, and the ceiling here is 2 MB.
+zipmemory: testbin
+	@JOLT_NO_USER_DEPS=1 target/release/jolt run test/zip_memory_test.clj
 
 # Lazy realization costs the same whether or not a thread has ever existed: a
 # cell publishes its forced tail through one word and reads it lock-free, and the
@@ -600,11 +617,23 @@ completionssmoke: testbin
 depscpcache: testbin
 	@JOLT_BIN="$${JOLT_BIN:-target/release/jolt}" sh host/chez/deps-cpcache-smoke.sh
 
+# Dependency resolution with no unzip on PATH (jolt issue #988): a :mvn/version
+# jar from an offline local repository resolves, and a jar that is not a zip
+# fails loudly with no marker and no temporary file left.
+depsnounzip: testbin
+	@JOLT_BIN="$${JOLT_BIN:-target/release/jolt}" sh host/chez/deps-no-unzip-smoke.sh
+
 # Shared Grenadine dependency-expansion integration tests: exclusions, version
 # selection, orphan cutting, and the Maven version comparator, driven through
 # a fake coordinate type. The cases are ported from tools.deps. Offline.
 depsunit:
 	@JOLT_NO_USER_DEPS=1 bin/jolt run test/deps_expand_test.clj
+
+# jolt.host/extract-zip! over the zip fixtures: the trees unzip -o -q made,
+# UTF-8 names, an archive with a comment, replaced files, refused names, a
+# symbolic link, and archives that are not whole. Offline.
+zipextract:
+	@JOLT_NO_USER_DEPS=1 bin/jolt run test/zip_extract_test.clj
 
 # Vendored Grenadine core plus Jolt's effective-POM adapter. Offline.
 grenadine:
@@ -691,6 +720,12 @@ ffi:
 	@bin/jolt run test/chez/jolt-ffi-arena-test.clj
 	@sh test/chez/ffi-native-error-test.sh "$(CHEZ)"
 	@sh test/chez/ffi-foreign-thread-test.sh
+
+# zlib bindings (host/chez/java/zlib.ss): the z_stream layout, entry-point
+# resolution, checksums, round trips, error codes, dictionaries, parameter
+# changes, close, and the guardian drain.
+zlibunit:
+	@$(CHEZ) --script test/chez/zlib-test.ss
 
 # Escape continuations (jolt.continuations, issue #736): the one-shot contract
 # call-cc/letcc expose, what unwinds on an escape, that a park inside ONE fiber
@@ -1072,9 +1107,9 @@ parkcheck:
 # jolt.host/sh is Chez's `system`, which is cmd.exe on Windows: `mkdir -p a/b`
 # there creates a directory named `-p`, and mv/rm/touch/test/find are not
 # commands at all. So the resolver does its filesystem work through filesystem
-# calls, and the shell is left for git and unzip, which are real programs. The
-# two spellings look alike in the source, so the rule is checked rather than
-# remembered.
+# calls, and the shell is left for git, which is a real program; jars extract in
+# process. The two spellings look alike in the source, so the rule is checked
+# rather than remembered.
 shelloutcheck:
 	@sh host/chez/shellout-check.sh
 
