@@ -1,0 +1,185 @@
+--- a/lib/_eval.scm
++++ b/lib/_eval.scm
+@@ -1,3 +1,5 @@
++;;; Experimental modification for Jolt runtime review: 64-slot policy and internal-call fixes.
++;;; SPDX-License-Identifier: Apache-2.0
+ ;;;============================================================================
+ 
+ ;;; File: "_eval.scm"
+@@ -10,6 +12,8 @@
+ 
+ ;;;============================================================================
+ 
++(##include "public-argument-policy.scm")
++
+ ;;; Implementation of exceptions.
+ 
+ (implement-library-type-expression-parsing-exception)
+@@ -2125,6 +2129,8 @@
+           (##vector-ref all-parms 3))
+          (key-parameters
+           (##vector-ref all-parms 4)))
++    (if (##not (macro-public-slots-ok? required-parameters optional-parameters key-parameters rest-parameter))
++        (##raise-expression-parsing-exception 'ill-formed-expression src "Public parameter slot limit is 64"))
+     (let loop1 ((frame required-parameters)
+                 (lst (or optional-parameters '()))
+                 (rev-inits '()))
+@@ -3182,6 +3188,8 @@
+          (len (##proper-length code)))
+     (if len
+         (let ((tail? (##tail-call? cte tail?)))
++          (if (##not (macro-public-count-ok? (##fx- len 1)))
++              (##raise-expression-parsing-exception 'ill-formed-call src "Public argument limit is 64"))
+           (macro-gen ##gen-app src
+             (##comp-subexpr cte (##sourcify (##car code) src) #f)
+             (##comp-vals cte src (##cdr code))))
+@@ -4901,6 +4909,8 @@
+ 
+ (define ##gen-app-aux
+   (macro-make-gen (stepper oper args)
++    (if (##not (macro-public-count-ok? (##length args)))
++        (##raise-expression-parsing-exception 'ill-formed-call src "Public lowering argument limit is 64"))
+     (if (and tail? (##generate-proper-tail-calls))
+         (case (##length args)
+           ((0)
+--- a/gsc/_ptree1.scm
++++ b/gsc/_ptree1.scm
+@@ -1,3 +1,5 @@
++;;; Experimental modification for Jolt runtime review: 64-slot policy and internal-call fixes.
++;;; SPDX-License-Identifier: Apache-2.0
+ ;;;============================================================================
+ 
+ ;;; File: "_ptree1.scm"
+@@ -5,6 +7,7 @@
+ ;;; Copyright (c) 1994-2025 by Marc Feeley, All Rights Reserved.
+ 
+ (include "fixnum.scm")
++(include "../lib/public-argument-policy.scm")
+ 
+ (include-adt "_envadt.scm")
+ (include-adt "_gvmadt.scm")
+@@ -1260,6 +1263,8 @@
+             (list (new-variable (parameter-source rest-parameter)))
+             '())))
+ 
++    (if (not (macro-public-slots-ok? required-parameters optional-parameters key-parameters rest-parameter))
++        (pt-syntax-error source "Public parameter slot limit is 64"))
+     (check-none-result
+      (split-default-bindings
+       (or optional-parameters '())
+@@ -2108,6 +2113,8 @@
+ (define (pt-combination source env use)
+   (let* ((code (source-code source))
+          (oper (pt (car code) env 'true)))
++    (if (not (macro-public-count-ok? (length (cdr code))))
++        (pt-syntax-error source "Public argument limit is 64"))
+     (new-call* source env
+       oper
+       (map (lambda (x) (pt x env 'true)) (cdr code)))))
+--- a/lib/_kernel.scm
++++ b/lib/_kernel.scm
+@@ -1,3 +1,5 @@
++;;; Experimental modification for Jolt runtime review: 64-slot policy and internal-call fixes.
++;;; SPDX-License-Identifier: Apache-2.0
+ ;;;============================================================================
+ 
+ ;;; File: "_kernel.scm"
+@@ -23,6 +25,7 @@
+ #include "os_io.h"
+ #include "setup.h"
+ #include "mem.h"
++#include "public-argument-policy.h"
+ #include "c_intf.h"
+ 
+ #include "stamp-release.h"
+@@ -3006,11 +3009,7 @@
+ 
+      while (___PAIRP(lst))
+        {
+-         ___PUSH(___CAR(lst))
+-         lst = ___CDR(lst);
+-         na++;
+-
+-         if (na > ___MAX_NB_ARGS)
++         if (na >= ___PUBLIC_ARGUMENT_LIMIT)
+            {
+              ___ADJFP(-na); /* remove pushed arguments */
+ 
+@@ -3021,6 +3020,10 @@
+              ___JUMPPRM(___SET_NARGS(2),
+                         ___PRMCELL(___G__23__23_raise_2d_number_2d_of_2d_arguments_2d_limit_2d_exception.prm))
+            }
++
++         ___PUSH(___CAR(lst))
++         lst = ___CDR(lst);
++         na++;
+        }
+ 
+      ___POP_ARGS_IN_REGS(na) /* load register arguments */
+--- a/gsc/_front.scm
++++ b/gsc/_front.scm
+@@ -1,3 +1,5 @@
++;;; Experimental modification for Jolt runtime review: 64-slot policy and internal-call fixes.
++;;; SPDX-License-Identifier: Apache-2.0
+ ;;;============================================================================
+ 
+ ;;; File: "_front.scm"
+@@ -1570,10 +1572,18 @@
+                  (make-reg i))))))))
+ 
+ (define (highest lst) ; return highest number in a list
+-  (if (null? lst) #f (apply max lst)))
++  (if (null? lst)
++      #f
++      (let loop ((best (car lst)) (rest (cdr lst)))
++        (if (null? rest) best
++            (loop (max best (car rest)) (cdr rest))))))
+ 
+ (define (lowest lst) ; return lowest number in a list
+-  (if (null? lst) #f (apply min lst)))
++  (if (null? lst)
++      #f
++      (let loop ((best (car lst)) (rest (cdr lst)))
++        (if (null? rest) best
++            (loop (min best (car rest)) (cdr rest))))))
+ 
+ (define (var->opnd var)
+   (let ((x (var-constant var)))
+--- a/lib/_repl.scm
++++ b/lib/_repl.scm
+@@ -1,3 +1,5 @@
++;;; Experimental modification for Jolt runtime review: 64-slot policy and internal-call fixes.
++;;; SPDX-License-Identifier: Apache-2.0
+ ;;;============================================================================
+ 
+ ;;; File: "_repl.scm"
+@@ -5064,7 +5066,7 @@
+   (set! ##gambdoc x))
+ 
+ (define-prim (##escape-link str)
+-  (##apply ##string-append
++  (##string-concatenate
+            (##map (lambda (c)
+                     (cond ((##char=? c #\space) "_")
+                           ((##char=? c #\#) "%E2%99%AF")
+--- /dev/null
++++ b/lib/public-argument-policy.scm
+@@ -0,0 +1,11 @@
++;;; Experimental modification for Jolt runtime review: 64-slot policy and internal-call fixes.
++;;; SPDX-License-Identifier: Apache-2.0
++(##define-macro (macro-public-limit) 64)
++(##define-macro (macro-public-count-ok? n)
++  `(##fx<= ,n (macro-public-limit)))
++(##define-macro (macro-public-slots-ok? req opt key rest)
++  `(macro-public-count-ok?
++    (##fx+ (##length ,req)
++           (##length (##or ,opt '()))
++           (##length (##or ,key '()))
++           (##if ,rest 1 0))))
+--- /dev/null
++++ b/lib/public-argument-policy.h
+@@ -0,0 +1,4 @@
++/* Experimental modification for Jolt runtime review: 64-slot policy and internal-call fixes.
++ * SPDX-License-Identifier: Apache-2.0
++ */
++#define ___PUBLIC_ARGUMENT_LIMIT 64

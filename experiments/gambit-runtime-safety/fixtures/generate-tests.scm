@@ -1,0 +1,36 @@
+(##include "forms.scm")
+(define (write-forms path forms)
+  (call-with-output-file path
+    (lambda (p) (for-each (lambda (x) (write x p) (newline p)) forms))))
+(define modes '(positional optional keyword rest mixed))
+(for-each
+ (lambda (mode)
+   (write-forms (string-append "reject-" (symbol->string mode) ".scm")
+                (list (list 'define 'oversized (lambda-form mode 65)))))
+ modes)
+(write-forms "reject-direct.scm" (list (cons 'external-rest (make-list 65 1))))
+(write-forms "reject-macro.scm"
+ (list (list 'define-macro '(expanded-call)
+             (list 'quote (cons 'external-rest (make-list 65 1))))
+       '(expanded-call)))
+(write-forms "accepted.scm"
+ (append
+  '((define (static-rest . xs) (length xs))
+    (define (static-check label got)
+      (if (= got 64) (begin (write (list 'STATIC-PASS label got)) (newline))
+          (error "Static boundary failed" label got))))
+  (list (list 'static-check '(quote direct) (cons 'static-rest (make-list 64 1))))
+  (map (lambda (mode)
+         (list 'define (string->symbol (string-append "static-" (symbol->string mode)))
+               (lambda-form mode 64))) modes)
+  (map (lambda (mode)
+         (list 'static-check (list 'quote mode)
+               (cons (string->symbol (string-append "static-" (symbol->string mode)))
+                     (case mode
+                       ((positional rest) (make-list 64 1))
+                       ((mixed) (make-list 20 1))
+                       (else '()))))) modes)
+  (list (list 'define-macro '(static-expanded)
+              (list 'quote (cons 'static-rest (make-list 64 1))))
+        '(static-check 'macro (static-expanded))
+        '(include "runtime-tests.scm"))))

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Standalone experimental Gambit runtime review package with a pinned-source
+  patch, offline host reproduction, and focused argument-policy tests. This
+  does not add ESP32 support or change supported Jolt targets.
+
 ## [0.8.15] - 2026-09-29
 
 Sockets gain read, accept and connect timeouts, and a closed socket behaves

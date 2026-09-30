@@ -1,0 +1,23 @@
+(define passed 0)
+(define failed 0)
+(define (reference str)
+  (let loop ((chars (string->list str)) (out ""))
+    (if (null? chars) out
+        (loop (cdr chars)
+              (string-append out
+                (case (car chars)
+                  ((#\space) "_") ((#\#) "%E2%99%AF") ((#\%) "%25")
+                  ((#\*) "%2A") ((#\+) "%2B") ((#\<) "%3C") ((#\>) "%3E")
+                  (else (string (car chars)))))))))
+(for-each
+ (lambda (str)
+   (let ((expected (reference str)) (actual (##escape-link str)))
+     (if (equal? actual expected)
+         (set! passed (+ passed 1))
+         (begin (set! failed (+ failed 1)) (write (list 'FAIL str expected actual)) (newline)))))
+ (list "" "a" " # % * + < >" "λ雪é" (make-string 64 #\a)
+       (make-string 65 #\a) (make-string 256 #\#) (make-string 256 #\%)
+       (make-string 256 #\space)))
+(write (list 'ESCAPE 'passed passed 'failed failed))
+(newline)
+(exit (if (= failed 0) 0 1))
