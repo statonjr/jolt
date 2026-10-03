@@ -1734,6 +1734,7 @@ gambitboot:
 	    *BOOT-OK*) echo "gambitboot: full-profile boot OK on gsi";; \
 	    *) printf '%s\n' "$$out" | tail -20; echo "gambitboot: FAILED — full-profile boot did not reach BOOT-OK" >&2; exit 1;; \
 	  esac; \
+	  "$(GAMBIT_GSI)" host/gambit/pprint-write-test.ss < /dev/null || exit $$?; \
 	else \
 	  $(GAMBIT-SKIP); \
 	fi

@@ -190,6 +190,16 @@
     "defmethod against simple-dispatch registers without error")
 (ok= (out (->Gadget 4)) "G-4\n" "a Gadget pprint routes through its defmethod method")
 
+(ok= (bound? #'clojure.pprint/PrettyWriter) true "PrettyWriter is bound")
+(ok= (let [writes (atom [])
+           w (reify java.io.Writer
+               (write [this s] (swap! writes conj s)))]
+       (binding [*out* w] (print "routed"))
+       @writes)
+     ["routed"] "rebound writer receives output")
+(ok= (clojure.pprint/write {:n 7} :stream nil :dispatch (fn [x] (print (str "W-" (:n x)))))
+     "W-7" "custom dispatcher returns captured output")
+
 ;; --- verdict -------------------------------------------------------------------
 (let [n @passes f @fails]
   (doseq [m f] (println "pprint-dispatch FAIL " m))

@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Ordinary output works in a reduced profile that leaves `PrettyWriter` unbound.**
+  A Gambit profile without the regex group never binds the `PrettyWriter`
+  record, but the pprint write hook was still installed, so `print` and
+  `println` raised "not an instance of this record type". The hook now checks
+  the static Var with `bound?` before its type test and declines when the type
+  is unavailable. Full Chez and Gambit writer routing is unchanged.
+
 ## [0.8.16] - 2026-10-02
 
 jolt reports Clojure 1.12 and has what it added: `Class/new` and

@@ -2454,6 +2454,6 @@
 (clojure.core/__set-pprint-write-hook!
   (fn [s]
     (let [o clojure.core/*out*]
-      (when (instance? PrettyWriter o)
+      (when (and (bound? #'PrettyWriter) (instance? PrettyWriter o))
         (-write o s)
         true))))

@@ -58,6 +58,30 @@
           "42")
 (evals-to "host clock still real" "(> (current-time-ms) 1700000000000)" "true")
 
+;; Keep the pprint hook active during output and error capture.
+(define (output-evals-to label src expected-output expected-value)
+  (let* ((value #f)
+         (output
+           (call-with-output-string
+             (lambda (port)
+               (parameterize ((current-output-port port))
+                 (set! value
+                   (guard (e (#t (string-append "THREW " (profile-error-text e))))
+                     (jolt-pr-readable (jolt-compile-eval src "user")))))))))
+    (report (and (string=? output expected-output)
+                 (string=? value expected-value))
+            label (list output value))))
+
+(evals-to "pprint hook is active"
+          "(jolt.host/scheme-eval-string \"(jolt-pprint-hook-suppressed)\")" "false")
+(output-evals-to "println and return" "(do (println \"hello\") 42)" "hello\n" "42")
+(output-evals-to "println and throw"
+                 "(do (println \"before-error\") (throw (ex-info \"session-boom\" {})))"
+                 "before-error\n" "THREW session-boom")
+(evals-to "valid expression after output error" "(+ 20 22)" "42")
+(evals-to "rebound writer receives output"
+          "(let [writes (atom []) w (reify java.io.Writer (write [this s] (swap! writes conj s)))] (binding [*out* w] (print \"routed\")) @writes)"
+          "[\"routed\"]")
 (printf "== the excluded group reports itself ==\n")
 
 (excluded-with-group "re-seq" "(re-seq #\"[a-z]+\" \"ab cd\")" "regex")
